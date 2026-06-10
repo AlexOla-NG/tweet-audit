@@ -1,0 +1,13 @@
+{
+  "criteria": {
+    "forbidden_words": [
+      "crypto",
+      "NFT",
+      "hustlegrindset"
+    ],
+    "professional_check": true,
+    "tone": "respectful and thoughtful",
+    "exclude_politics": true,
+    "description": "Flag tweets that use unprofessional language, promote crypto/NFTs, or express outdated political views that no longer align with my current values."
+  }
+}
