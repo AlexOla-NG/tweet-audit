@@ -9,38 +9,40 @@
 3. **Output:** Generates a CSV file (`tweet_url,deleted`) listing tweets that should be removed.
 
 ## Architecture & Technology
-The project is currently in its initial setup phase. The following requirements are established:
-- **AI Integration:** Must use Google's Gemini API for tweet evaluation.
+- **AI Integration:** Uses \`google-genai\` SDK with \`gemini-2.5-flash\` as default.
+
+- **Batching:** 50 tweets per batch for efficiency.
+- **State Management:** Checkpointing via `.audit_checkpoint` file.
+- **Logging:** Dual-stream logging (Console: simple, File: robust).
 - **Config Management:** Sensitive information (API keys) is stored in `config.json` (ignored by git).
-- **Documentation:** Architectural decisions, concurrency strategies, and error handling must be documented in `TRADEOFFS.md`.
 
 ## Development Guidelines
 
 ### Implementation Priorities
-- **Simplicity:** Manual deletion via CSV is the primary use case; automated deletion via X API is considered optional/overkill.
+- **Simplicity:** Manual deletion via CSV is the primary use case.
 - **Reliability:** Handle API rate limits and potential network failures gracefully.
 - **Privacy:** Ensure the archive data and API keys are never exposed or committed.
 
 ### Testing Standards
-- **Mandatory Testing:** All implementation logic must be covered by tests in the `tests/` directory.
-- **Mocking:** Use mocks for Gemini API interactions to avoid unnecessary costs and dependency on live network calls during tests.
+- **Mandatory Testing:** All implementation logic is covered by tests in the `tests/` directory.
+- **Mocking:** Uses mocks for Gemini API interactions to avoid costs.
 
 ## Building and Running
 
 ### Prerequisites
-- Python
+- Python 3.10+
 
-- **Install Dependencies:** `pip install`
+- **Install Dependencies:** `pip install -r requirements.txt`
 - **Run Audit:** `python main.py`
-- **Run Tests:** `pytest`
+- **Run Tests:** `python -m pytest`
 
 ## Key Files
-- `README.md`: Project vision and user instructions.
+- `main.py`: The Audit Engine entry point.
+- `src/parser.py`: Logic for extracting tweets from JS archives.
+- `src/evaluator.py`: AI-powered evaluation logic.
+- `audit_results.csv`: The final report of flagged tweets.
 - `TRADEOFFS.md`: Living document for implementation decisions.
-- `src/`: Directory for source code.
-- `tests/`: Directory for test suites.
-- `config.json`: (Local only) Stores Gemini API keys and alignment criteria.
 
 ## Additional Coding Preferences
-
 - Keep project dependencies small
+- Do not import libraries that you won't use.

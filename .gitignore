@@ -1,2 +1,16 @@
 config.json
 /.gemini
+/twitter-data-2026-06-11
+GEMINI.md
+
+# Audit outputs and state
+audit.log
+.audit_checkpoint
+audit_results.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.DS_Store
