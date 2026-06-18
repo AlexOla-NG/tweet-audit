@@ -30,7 +30,8 @@ class TweetEvaluator:
 
         prompt = f"""
 Analyze the following list of tweets against the provided alignment criteria.
-Return ONLY a JSON list of tweet IDs that SHOULD BE DELETED because they violate the criteria.
+Return ONLY a JSON list of objects for tweets that SHOULD BE DELETED.
+Each object must have "id" and "reason" fields.
 If no tweets violate the criteria, return an empty list [].
 Do not include any explanation or other text.
 
@@ -41,12 +42,15 @@ Tweets to analyze:
 {tweets_str}
 
 Format your response exactly like this:
-["id1", "id2", ...]
+[
+  {{"id": "id1", "reason": "concise reason for flagging"}},
+  {{"id": "id2", "reason": "concise reason for flagging"}}
+]
 """
         return prompt
 
-    async def evaluate_batch(self, tweets: List[Dict]) -> List[str]:
-        """Evaluates a batch of tweets and returns IDs that should be deleted."""
+    async def evaluate_batch(self, tweets: List[Dict]) -> List[Dict[str, str]]:
+        """Evaluates a batch of tweets and returns a list of flagged objects {id, reason}."""
         if not tweets:
             return []
 
@@ -68,12 +72,23 @@ Format your response exactly like this:
                     if text.startswith("json"):
                         text = text[4:].strip()
             
-            flagged_ids = json.loads(text)
-            if not isinstance(flagged_ids, list):
+            flagged_items = json.loads(text)
+            if not isinstance(flagged_items, list):
                 logger.warning(f"Unexpected response format from AI (not a list): {text}")
                 return []
             
-            return [str(fid) for fid in flagged_ids]
+            # Ensure each item is a dict with id and reason
+            validated_items = []
+            for item in flagged_items:
+                if isinstance(item, dict) and "id" in item and "reason" in item:
+                    validated_items.append({
+                        "id": str(item["id"]),
+                        "reason": str(item["reason"])
+                    })
+                else:
+                    logger.warning(f"Skipping malformed flagged item: {item}")
+            
+            return validated_items
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON response from AI: {e}. Raw text: {text}")
             return []

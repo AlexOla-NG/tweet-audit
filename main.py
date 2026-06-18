@@ -80,7 +80,7 @@ class AuditEngine:
             file_exists = os.path.exists(results_file)
             
             with open(results_file, "a", newline="") as csvfile:
-                fieldnames = ["tweet_url", "deleted"]
+                fieldnames = ["tweet_url", "deleted", "reason"]
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 if not file_exists:
                     writer.writeheader()
@@ -90,7 +90,9 @@ class AuditEngine:
                     logger.info(f"Processing batch {i//batch_size + 1}/{(len(pending_tweets)-1)//batch_size + 1} ({len(batch)} tweets)...")
                     
                     try:
-                        flagged_ids = await self.evaluator.evaluate_batch(batch)
+                        flagged_items = await self.evaluator.evaluate_batch(batch)
+                        # Create a map for quick lookup
+                        reason_map = {item["id"]: item["reason"] for item in flagged_items}
                     except RateLimitError as e:
                         logger.error(f"Stopping audit due to rate limit: {e}")
                         logger.info("Progress has been saved. You can resume later.")
@@ -98,16 +100,21 @@ class AuditEngine:
 
                     for t in batch:
                         t_id = t.get("id_str") or t.get("id")
-                        is_flagged = t_id in flagged_ids
+                        reason = reason_map.get(str(t_id))
+                        is_flagged = reason is not None
                         
                         # Log flagged tweets
                         if is_flagged:
-                            logger.warning(f"Flagged for deletion: {t_id}")
+                            logger.warning(f"Flagged for deletion: {t_id} - Reason: {reason}")
                         
                         # Write to CSV
                         username = self.config.get("username", "user")
                         tweet_url = f"https://x.com/{username}/status/{t_id}"
-                        writer.writerow({"tweet_url": tweet_url, "deleted": "false" if is_flagged else "n/a"})
+                        writer.writerow({
+                            "tweet_url": tweet_url, 
+                            "deleted": "true" if is_flagged else "false",
+                            "reason": reason or "n/a"
+                        })
                         
                         # Mark as processed
                         self._save_checkpoint(t_id)

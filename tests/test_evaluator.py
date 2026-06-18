@@ -20,7 +20,7 @@ async def test_evaluate_batch_rate_limit():
 @pytest.mark.asyncio
 async def test_evaluate_batch_success():
     mock_response = MagicMock()
-    mock_response.text = '["1", "3"]'
+    mock_response.text = '[{"id": "1", "reason": "unprofessional"}, {"id": "3", "reason": "offensive"}]'
     
     with patch("google.genai.Client") as mock_client_class:
         mock_client = mock_client_class.return_value
@@ -35,38 +35,41 @@ async def test_evaluate_batch_success():
             {"id": "3", "full_text": "NFT is the future"}
         ]
         
-        flagged_ids = await evaluator.evaluate_batch(tweets)
+        flagged_items = await evaluator.evaluate_batch(tweets)
         
-        assert flagged_ids == ["1", "3"]
+        assert flagged_items == [
+            {"id": "1", "reason": "unprofessional"},
+            {"id": "3", "reason": "offensive"}
+        ]
         mock_client.aio.models.generate_content.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_evaluate_batch_markdown_json_response():
     mock_response = MagicMock()
-    mock_response.text = '```json\n["1"]\n```'
+    mock_response.text = '```json\n[{"id": "1", "reason": "test"}]\n```'
     
     with patch("google.genai.Client") as mock_client_class:
         mock_client = mock_client_class.return_value
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         
         evaluator = TweetEvaluator(api_key="test_key", criteria={})
-        flagged_ids = await evaluator.evaluate_batch([{"id": "1", "full_text": "test"}])
+        flagged_items = await evaluator.evaluate_batch([{"id": "1", "full_text": "test"}])
         
-        assert flagged_ids == ["1"]
+        assert flagged_items == [{"id": "1", "reason": "test"}]
 
 @pytest.mark.asyncio
 async def test_evaluate_batch_markdown_plain_response():
     mock_response = MagicMock()
-    mock_response.text = '```\n["2"]\n```'
+    mock_response.text = '```\n[{"id": "2", "reason": "test2"}]\n```'
     
     with patch("google.genai.Client") as mock_client_class:
         mock_client = mock_client_class.return_value
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         
         evaluator = TweetEvaluator(api_key="test_key", criteria={})
-        flagged_ids = await evaluator.evaluate_batch([{"id": "2", "full_text": "test"}])
+        flagged_items = await evaluator.evaluate_batch([{"id": "2", "full_text": "test"}])
         
-        assert flagged_ids == ["2"]
+        assert flagged_items == [{"id": "2", "reason": "test2"}]
 
 @pytest.mark.asyncio
 async def test_evaluate_batch_invalid_json_logging(caplog):
