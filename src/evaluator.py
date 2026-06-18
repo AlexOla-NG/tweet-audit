@@ -11,7 +11,7 @@ class RateLimitError(Exception):
     pass
 
 class TweetEvaluator:
-    def __init__(self, api_key: str, criteria: Dict, model_name: str = 'gemini-2.0-flash-lite'):
+    def __init__(self, api_key: str, criteria: Dict, model_name: str = 'gemini-3.1-flash-lite'):
         self.api_key = api_key
         self.criteria = criteria
         self.model_name = model_name

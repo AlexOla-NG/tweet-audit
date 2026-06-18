@@ -87,7 +87,7 @@ async def test_evaluate_batch_invalid_json_logging(caplog):
 async def test_default_model_selection():
     with patch("google.genai.Client") as mock_client_class:
         evaluator = TweetEvaluator(api_key="test_key", criteria={})
-        assert evaluator.model_name == "gemini-2.0-flash-lite"
+        assert evaluator.model_name == "gemini-3.1-flash-lite"
         mock_client_class.assert_called_once_with(api_key="test_key")
 
 @pytest.mark.asyncio
