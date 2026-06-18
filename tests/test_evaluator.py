@@ -1,7 +1,21 @@
 import pytest
 import json
 from unittest.mock import AsyncMock, patch, MagicMock
-from src.evaluator import TweetEvaluator
+from src.evaluator import TweetEvaluator, RateLimitError
+
+@pytest.mark.asyncio
+async def test_evaluate_batch_rate_limit():
+    with patch("google.genai.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value
+        # Simulate a 429 error from the SDK
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=Exception("429 RESOURCE_EXHAUSTED"))
+        
+        evaluator = TweetEvaluator(api_key="test_key", criteria={})
+        
+        with pytest.raises(RateLimitError) as excinfo:
+            await evaluator.evaluate_batch([{"id": "1", "full_text": "test"}])
+        
+        assert "Gemini API rate limit reached" in str(excinfo.value)
 
 @pytest.mark.asyncio
 async def test_evaluate_batch_success():

@@ -5,7 +5,7 @@ import logging
 import os
 from typing import List, Dict
 from src.parser import ArchiveParser
-from src.evaluator import TweetEvaluator
+from src.evaluator import TweetEvaluator, RateLimitError
 
 # Configure logging to both file and console with different formats
 log_formatter_file = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -89,8 +89,13 @@ class AuditEngine:
                     batch = pending_tweets[i : i + batch_size]
                     logger.info(f"Processing batch {i//batch_size + 1}/{(len(pending_tweets)-1)//batch_size + 1} ({len(batch)} tweets)...")
                     
-                    flagged_ids = await self.evaluator.evaluate_batch(batch)
-                    
+                    try:
+                        flagged_ids = await self.evaluator.evaluate_batch(batch)
+                    except RateLimitError as e:
+                        logger.error(f"Stopping audit due to rate limit: {e}")
+                        logger.info("Progress has been saved. You can resume later.")
+                        return
+
                     for t in batch:
                         t_id = t.get("id_str") or t.get("id")
                         is_flagged = t_id in flagged_ids

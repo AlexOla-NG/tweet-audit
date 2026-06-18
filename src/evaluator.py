@@ -6,6 +6,10 @@ from typing import List, Dict, Optional
 # Configure logging
 logger = logging.getLogger("tweet-audit.evaluator")
 
+class RateLimitError(Exception):
+    """Raised when the AI API rate limit is exceeded."""
+    pass
+
 class TweetEvaluator:
     def __init__(self, api_key: str, criteria: Dict, model_name: str = 'gemini-2.5-flash'):
         self.api_key = api_key
@@ -74,6 +78,11 @@ Format your response exactly like this:
             logger.error(f"Failed to decode JSON response from AI: {e}. Raw text: {text}")
             return []
         except Exception as e:
+            error_msg = str(e)
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                logger.error(f"Rate limit exceeded: {error_msg}")
+                raise RateLimitError(f"Gemini API rate limit reached: {error_msg}")
+            
             logger.error(f"Error during AI evaluation: {e}", exc_info=True)
             return []
 
