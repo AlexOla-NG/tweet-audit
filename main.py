@@ -3,7 +3,9 @@ import csv
 import json
 import logging
 import os
-from typing import List, Dict
+import time
+from typing import List, Dict, Deque
+from collections import deque
 from src.parser import ArchiveParser
 from src.evaluator import TweetEvaluator, RateLimitError
 
@@ -26,6 +28,43 @@ root_logger.addHandler(console_handler)
 
 logger = logging.getLogger("tweet-audit.main")
 
+class RateLimiter:
+    """Sliding window rate limiter for RPM and TPM."""
+    def __init__(self, max_rpm: int = 15, max_tpm: int = 250000):
+        self.max_rpm = max_rpm
+        self.max_tpm = max_tpm
+        self.requests: Deque[float] = deque()
+        self.tokens: Deque[tuple[float, int]] = deque()
+
+    def _clean_windows(self):
+        now = time.time()
+        # Keep only last 60 seconds
+        while self.requests and now - self.requests[0] > 60:
+            self.requests.popleft()
+        while self.tokens and now - self.tokens[0][0] > 60:
+            self.tokens.popleft()
+
+    async def wait_for_capacity(self, estimated_tokens: int):
+        """Waits until there is capacity for another request with estimated tokens."""
+        while True:
+            self._clean_windows()
+            
+            current_rpm = len(self.requests)
+            current_tpm = sum(t[1] for t in self.tokens)
+            
+            if current_rpm < self.max_rpm and (current_tpm + estimated_tokens) < self.max_tpm:
+                break
+                
+            # Wait a bit before checking again
+            logger.info(f"Rate limit approaching (RPM: {current_rpm}/{self.max_rpm}, TPM: {current_tpm}/{self.max_tpm}). Throttling...")
+            await asyncio.sleep(2)
+
+    def record_request(self, actual_tokens: int):
+        """Records a successful request and its token usage."""
+        now = time.time()
+        self.requests.append(now)
+        self.tokens.append((now, actual_tokens))
+
 class AuditEngine:
     def __init__(self, config_path: str, archive_path: str, checkpoint_path: str = ".audit_checkpoint"):
         self.config_path = config_path
@@ -42,6 +81,9 @@ class AuditEngine:
             criteria=self.criteria,
             model_name=self.config.get("model_name", "gemini-3.1-flash-lite")
         )
+        
+        # Initialize RateLimiter for Gemini 3.1 Flash Lite
+        self.rate_limiter = RateLimiter(max_rpm=15, max_tpm=250000)
 
     def _load_config(self) -> Dict:
         if not os.path.exists(self.config_path):
@@ -89,8 +131,14 @@ class AuditEngine:
                     batch = pending_tweets[i : i + batch_size]
                     logger.info(f"Processing batch {i//batch_size + 1}/{(len(pending_tweets)-1)//batch_size + 1} ({len(batch)} tweets)...")
                     
+                    # Estimate tokens and wait if necessary
+                    est_tokens = self.evaluator.estimate_tokens(batch)
+                    await self.rate_limiter.wait_for_capacity(est_tokens)
+                    
                     try:
-                        flagged_items = await self.evaluator.evaluate_batch(batch)
+                        flagged_items, actual_tokens = await self.evaluator.evaluate_batch(batch)
+                        self.rate_limiter.record_request(actual_tokens)
+                        
                         # Create a map for quick lookup
                         reason_map = {item["id"]: item["reason"] for item in flagged_items}
                     except RateLimitError as e:
@@ -118,9 +166,6 @@ class AuditEngine:
                         
                         # Mark as processed
                         self._save_checkpoint(t_id)
-                    
-                    # Simple rate limiting to be safe
-                    await asyncio.sleep(1)
 
             logger.info("Audit complete. Results saved to audit_results.csv")
         finally:

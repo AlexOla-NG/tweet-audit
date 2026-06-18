@@ -49,10 +49,16 @@ Format your response exactly like this:
 """
         return prompt
 
-    async def evaluate_batch(self, tweets: List[Dict]) -> List[Dict[str, str]]:
-        """Evaluates a batch of tweets and returns a list of flagged objects {id, reason}."""
+    def estimate_tokens(self, tweets: List[Dict]) -> int:
+        """Conservative estimation of tokens in the prompt."""
+        prompt = self._build_prompt(tweets)
+        # Conservative estimate: ~3 characters per token
+        return len(prompt) // 3
+
+    async def evaluate_batch(self, tweets: List[Dict]) -> tuple[List[Dict[str, str]], int]:
+        """Evaluates a batch of tweets and returns (flagged_objects, total_tokens)."""
         if not tweets:
-            return []
+            return [], 0
 
         prompt = self._build_prompt(tweets)
         
@@ -63,6 +69,11 @@ Format your response exactly like this:
                 contents=prompt
             )
             text = response.text.strip()
+            
+            # Extract actual token usage
+            total_tokens = 0
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                total_tokens = response.usage_metadata.total_token_count or 0
             
             # Robust JSON extraction from markdown code blocks
             if "```" in text:
@@ -75,7 +86,7 @@ Format your response exactly like this:
             flagged_items = json.loads(text)
             if not isinstance(flagged_items, list):
                 logger.warning(f"Unexpected response format from AI (not a list): {text}")
-                return []
+                return [], total_tokens
             
             # Ensure each item is a dict with id and reason
             validated_items = []
@@ -88,10 +99,10 @@ Format your response exactly like this:
                 else:
                     logger.warning(f"Skipping malformed flagged item: {item}")
             
-            return validated_items
+            return validated_items, total_tokens
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON response from AI: {e}. Raw text: {text}")
-            return []
+            return [], total_tokens
         except Exception as e:
             error_msg = str(e)
             if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
@@ -99,7 +110,7 @@ Format your response exactly like this:
                 raise RateLimitError(f"Gemini API rate limit reached: {error_msg}")
             
             logger.error(f"Error during AI evaluation: {e}", exc_info=True)
-            return []
+            return [], 0
 
     async def close(self):
         """Closes the underlying async client."""
