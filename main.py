@@ -40,7 +40,7 @@ class AuditEngine:
         self.evaluator = TweetEvaluator(
             api_key=self.config["GEMINI_API_KEY"],
             criteria=self.criteria,
-            model_name=self.config.get("model_name", "gemini-2.5-flash")
+            model_name=self.config.get("model_name", "gemini-2.0-flash-lite")
         )
 
     def _load_config(self) -> Dict:
