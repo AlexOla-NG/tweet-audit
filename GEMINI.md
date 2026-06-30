@@ -6,10 +6,10 @@
 ### Core Workflow
 1. **Archive Input:** User provides their official X data archive.
 2. **Analysis:** The tool parses the archive and evaluates each tweet using the Gemini API based on a JSON-defined criteria set.
-3. **Output:** Generates a CSV file (`tweet_url,deleted`) listing tweets that should be removed.
+3. **Output:** Generates a CSV file (`tweet_url,deleted,confidence,reason`) listing tweets that should be removed.
 
 ## Architecture & Technology
-- **AI Integration:** Uses \`google-genai\` SDK with \`gemini-2.5-flash\` as default.
+- **AI Integration:** Uses `google-genai` SDK with `gemini-3.1-flash-lite` as default.
 
 - **Batching:** 50 tweets per batch for efficiency.
 - **State Management:** Checkpointing via `.audit_checkpoint` file.
