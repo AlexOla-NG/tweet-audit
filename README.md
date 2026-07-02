@@ -12,12 +12,12 @@ This tool processes your X archive, evaluates each tweet against your alignment 
 Request an archive of your posts on X, analyse them using Google's Gemini AI, and flag tweets for deletion based on any criteria.
 
 ### Output
-A CSV file containing flagged tweet URLs and a deletion status flag:
-\`\`\`csv
-tweet_url,deleted
-https://x.com/username/status/1234567890,false
-https://x.com/username/status/9876543210,false
-\`\`\`
+A CSV file containing flagged tweet URLs, deletion status, confidence level, and reasoning:
+```csv
+tweet_url,deleted,confidence,reason
+https://x.com/username/status/1234567890,false,n/a,n/a
+https://x.com/username/status/9876543210,true,High,Violates cryptocurrency forbidden words rule (mentions 'NFT')
+```
 
 ## Setup
 

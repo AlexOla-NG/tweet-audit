@@ -101,28 +101,99 @@ class AuditEngine:
         with open(self.checkpoint_path, "a") as f:
             f.write(f"{tweet_id}\n")
 
+    def _migrate_csv_if_needed(self, results_file: str):
+        """Checks if the existing results CSV has the old schema and migrates it."""
+        if not os.path.exists(results_file):
+            return
+        
+        # Read the first line to check headers
+        with open(results_file, "r", newline="", encoding="utf-8") as csvfile:
+            reader = csv.reader(csvfile)
+            try:
+                headers = next(reader)
+            except StopIteration:
+                headers = []
+
+        if headers and "confidence" not in headers:
+            logger.info(f"Old CSV schema detected in {results_file}. Migrating to new schema...")
+            temp_file = results_file + ".tmp"
+            
+            with open(results_file, "r", newline="", encoding="utf-8") as infile, \
+                 open(temp_file, "w", newline="", encoding="utf-8") as outfile:
+                reader = csv.DictReader(infile)
+                fieldnames = ["tweet_url", "deleted", "confidence", "reason"]
+                writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for row in reader:
+                    is_deleted = row.get("deleted") == "true"
+                    writer.writerow({
+                        "tweet_url": row.get("tweet_url"),
+                        "deleted": row.get("deleted"),
+                        "confidence": "unknown" if is_deleted else "n/a",
+                        "reason": row.get("reason")
+                    })
+            
+            os.replace(temp_file, results_file)
+            logger.info(f"Migration of {results_file} complete.")
+
+    def _get_pending_tweets(self, tweets: List[Dict], results_file: str) -> List[Dict]:
+        """Return tweets that still need evaluation based on the results CSV state."""
+        if not os.path.exists(results_file):
+            return tweets
+
+        processed_ids = set()
+        incomplete_ids = set()
+
+        with open(results_file, "r", newline="", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                tweet_url = (row.get("tweet_url") or "").strip()
+                if not tweet_url:
+                    continue
+
+                tweet_id = tweet_url.split("/status/")[-1].split("?")[0].split("#")[0]
+                if not tweet_id:
+                    continue
+
+                deleted = (row.get("deleted") or "").strip().lower() == "true"
+                confidence = (row.get("confidence") or "").strip()
+
+                if deleted and not confidence:
+                    incomplete_ids.add(tweet_id)
+                else:
+                    processed_ids.add(tweet_id)
+
+        pending_tweets = []
+        for tweet in tweets:
+            tweet_id = str(tweet.get("id_str") or tweet.get("id"))
+            if tweet_id not in processed_ids:
+                pending_tweets.append(tweet)
+
+        return pending_tweets
+
     async def run(self, batch_size: int = 50):
         try:
             logger.info(f"Starting audit for archive: {self.archive_path}")
             
             parser = ArchiveParser(self.archive_path)
             all_tweets = parser.parse()
-            processed_ids = self._load_checkpoint()
-            
-            # Filter out already processed tweets
-            pending_tweets = [t for t in all_tweets if (t.get("id_str") or t.get("id")) not in processed_ids]
-            
-            logger.info(f"Total tweets: {len(all_tweets)}. Already processed: {len(processed_ids)}. Pending: {len(pending_tweets)}.")
+
+            results_file = "audit_results.csv"
+            self._migrate_csv_if_needed(results_file)
+            pending_tweets = self._get_pending_tweets(all_tweets, results_file)
+            already_processed = len(all_tweets) - len(pending_tweets)
+
+            logger.info(f"Total tweets: {len(all_tweets)}. Already processed: {already_processed}. Pending: {len(pending_tweets)}.")
             
             if not pending_tweets:
                 logger.info("No pending tweets to process.")
                 return
 
-            results_file = "audit_results.csv"
             file_exists = os.path.exists(results_file)
             
             with open(results_file, "a", newline="") as csvfile:
-                fieldnames = ["tweet_url", "deleted", "reason"]
+                fieldnames = ["tweet_url", "deleted", "confidence", "reason"]
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 if not file_exists:
                     writer.writeheader()
@@ -140,7 +211,7 @@ class AuditEngine:
                         self.rate_limiter.record_request(actual_tokens)
                         
                         # Create a map for quick lookup
-                        reason_map = {item["id"]: item["reason"] for item in flagged_items}
+                        flagged_map = {item["id"]: item for item in flagged_items}
                     except RateLimitError as e:
                         logger.error(f"Stopping audit due to rate limit: {e}")
                         logger.info("Progress has been saved. You can resume later.")
@@ -148,12 +219,14 @@ class AuditEngine:
 
                     for t in batch:
                         t_id = t.get("id_str") or t.get("id")
-                        reason = reason_map.get(str(t_id))
-                        is_flagged = reason is not None
+                        flagged_info = flagged_map.get(str(t_id))
+                        is_flagged = flagged_info is not None
+                        reason = flagged_info["reason"] if is_flagged else None
+                        confidence = flagged_info["confidence"] if is_flagged else "n/a"
                         
                         # Log flagged tweets
                         if is_flagged:
-                            logger.warning(f"Flagged for deletion: {t_id} - Reason: {reason}")
+                            logger.warning(f"Flagged for deletion: {t_id} - Reason: {reason} - Confidence: {confidence}")
                         
                         # Write to CSV
                         username = self.config.get("username", "user")
@@ -161,6 +234,7 @@ class AuditEngine:
                         writer.writerow({
                             "tweet_url": tweet_url, 
                             "deleted": "true" if is_flagged else "false",
+                            "confidence": confidence,
                             "reason": reason or "n/a"
                         })
                         

@@ -31,7 +31,13 @@ class TweetEvaluator:
         prompt = f"""
 Analyze the following list of tweets against the provided alignment criteria.
 Return ONLY a JSON list of objects for tweets that SHOULD BE DELETED.
-Each object must have "id" and "reason" fields.
+Each object must have "id", "reason", and "confidence" fields.
+
+Confidence scoring guidelines:
+- "High": Direct/clear rule violations (e.g., contains explicit forbidden words/phrases).
+- "Medium": Subjective or tone-related violations (e.g., unprofessional language, disrespectful tone).
+- "Low": Ambiguous or borderline violations that might represent a minor shift in alignment.
+
 If no tweets violate the criteria, return an empty list [].
 Do not include any explanation or other text.
 
@@ -43,8 +49,8 @@ Tweets to analyze:
 
 Format your response exactly like this:
 [
-  {{"id": "id1", "reason": "concise reason for flagging"}},
-  {{"id": "id2", "reason": "concise reason for flagging"}}
+  {{"id": "id1", "reason": "concise reason for flagging", "confidence": "High/Medium/Low"}},
+  {{"id": "id2", "reason": "concise reason for flagging", "confidence": "High/Medium/Low"}}
 ]
 """
         return prompt
@@ -88,13 +94,23 @@ Format your response exactly like this:
                 logger.warning(f"Unexpected response format from AI (not a list): {text}")
                 return [], total_tokens
             
-            # Ensure each item is a dict with id and reason
+            # Ensure each item is a dict with id, reason, and confidence
             validated_items = []
             for item in flagged_items:
                 if isinstance(item, dict) and "id" in item and "reason" in item:
+                    # Validate and normalize confidence
+                    conf = item.get("confidence", "Medium")
+                    if isinstance(conf, str):
+                        conf = conf.strip().capitalize()
+                        if conf not in ("High", "Medium", "Low"):
+                            conf = "Medium"
+                    else:
+                        conf = "Medium"
+                        
                     validated_items.append({
                         "id": str(item["id"]),
-                        "reason": str(item["reason"])
+                        "reason": str(item["reason"]),
+                        "confidence": conf
                     })
                 else:
                     logger.warning(f"Skipping malformed flagged item: {item}")

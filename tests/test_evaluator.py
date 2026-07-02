@@ -18,7 +18,7 @@ async def test_evaluate_batch_rate_limit():
 @pytest.mark.asyncio
 async def test_evaluate_batch_success():
     mock_response = MagicMock()
-    mock_response.text = '[{"id": "1", "reason": "unprofessional"}, {"id": "3", "reason": "offensive"}]'
+    mock_response.text = '[{"id": "1", "reason": "unprofessional", "confidence": "High"}, {"id": "3", "reason": "offensive", "confidence": "Medium"}]'
     mock_response.usage_metadata.total_token_count = 100
     
     with patch("google.genai.Client") as mock_client_class:
@@ -37,8 +37,8 @@ async def test_evaluate_batch_success():
         flagged_items, total_tokens = await evaluator.evaluate_batch(tweets)
         
         assert flagged_items == [
-            {"id": "1", "reason": "unprofessional"},
-            {"id": "3", "reason": "offensive"}
+            {"id": "1", "reason": "unprofessional", "confidence": "High"},
+            {"id": "3", "reason": "offensive", "confidence": "Medium"}
         ]
         assert total_tokens == 100
         mock_client.aio.models.generate_content.assert_called_once()
@@ -46,7 +46,7 @@ async def test_evaluate_batch_success():
 @pytest.mark.asyncio
 async def test_evaluate_batch_markdown_json_response():
     mock_response = MagicMock()
-    mock_response.text = '```json\n[{"id": "1", "reason": "test"}]\n```'
+    mock_response.text = '```json\n[{"id": "1", "reason": "test", "confidence": "high"}]\n```'
     mock_response.usage_metadata.total_token_count = 50
     
     with patch("google.genai.Client") as mock_client_class:
@@ -56,13 +56,13 @@ async def test_evaluate_batch_markdown_json_response():
         evaluator = TweetEvaluator(api_key="test_key", criteria={})
         flagged_items, total_tokens = await evaluator.evaluate_batch([{"id": "1", "full_text": "test"}])
         
-        assert flagged_items == [{"id": "1", "reason": "test"}]
+        assert flagged_items == [{"id": "1", "reason": "test", "confidence": "High"}]
         assert total_tokens == 50
 
 @pytest.mark.asyncio
 async def test_evaluate_batch_markdown_plain_response():
     mock_response = MagicMock()
-    mock_response.text = '```\n[{"id": "2", "reason": "test2"}]\n```'
+    mock_response.text = '```\n[{"id": "2", "reason": "test2", "confidence": "low"}]\n```'
     mock_response.usage_metadata.total_token_count = 60
     
     with patch("google.genai.Client") as mock_client_class:
@@ -72,8 +72,28 @@ async def test_evaluate_batch_markdown_plain_response():
         evaluator = TweetEvaluator(api_key="test_key", criteria={})
         flagged_items, total_tokens = await evaluator.evaluate_batch([{"id": "2", "full_text": "test"}])
         
-        assert flagged_items == [{"id": "2", "reason": "test2"}]
+        assert flagged_items == [{"id": "2", "reason": "test2", "confidence": "Low"}]
         assert total_tokens == 60
+
+@pytest.mark.asyncio
+async def test_evaluate_batch_confidence_fallback():
+    mock_response = MagicMock()
+    # "id" 1 is missing confidence, "id" 2 has invalid confidence, "id" 3 has non-string confidence
+    mock_response.text = '[{"id": "1", "reason": "r1"}, {"id": "2", "reason": "r2", "confidence": "invalid"}, {"id": "3", "reason": "r3", "confidence": 123}]'
+    mock_response.usage_metadata.total_token_count = 30
+    
+    with patch("google.genai.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+        
+        evaluator = TweetEvaluator(api_key="test_key", criteria={})
+        flagged_items, total_tokens = await evaluator.evaluate_batch([{"id": "1"}, {"id": "2"}, {"id": "3"}])
+        
+        assert flagged_items == [
+            {"id": "1", "reason": "r1", "confidence": "Medium"},
+            {"id": "2", "reason": "r2", "confidence": "Medium"},
+            {"id": "3", "reason": "r3", "confidence": "Medium"}
+        ]
 
 @pytest.mark.asyncio
 async def test_evaluate_batch_invalid_json_logging(caplog):
