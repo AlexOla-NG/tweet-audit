@@ -137,25 +137,59 @@ class AuditEngine:
             os.replace(temp_file, results_file)
             logger.info(f"Migration of {results_file} complete.")
 
+    def _get_pending_tweets(self, tweets: List[Dict], results_file: str) -> List[Dict]:
+        """Return tweets that still need evaluation based on the results CSV state."""
+        if not os.path.exists(results_file):
+            return tweets
+
+        processed_ids = set()
+        incomplete_ids = set()
+
+        with open(results_file, "r", newline="", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                tweet_url = (row.get("tweet_url") or "").strip()
+                if not tweet_url:
+                    continue
+
+                tweet_id = tweet_url.split("/status/")[-1].split("?")[0].split("#")[0]
+                if not tweet_id:
+                    continue
+
+                deleted = (row.get("deleted") or "").strip().lower() == "true"
+                confidence = (row.get("confidence") or "").strip()
+
+                if deleted and not confidence:
+                    incomplete_ids.add(tweet_id)
+                else:
+                    processed_ids.add(tweet_id)
+
+        pending_tweets = []
+        for tweet in tweets:
+            tweet_id = str(tweet.get("id_str") or tweet.get("id"))
+            if tweet_id not in processed_ids:
+                pending_tweets.append(tweet)
+
+        return pending_tweets
+
     async def run(self, batch_size: int = 50):
         try:
             logger.info(f"Starting audit for archive: {self.archive_path}")
             
             parser = ArchiveParser(self.archive_path)
             all_tweets = parser.parse()
-            processed_ids = self._load_checkpoint()
-            
-            # Filter out already processed tweets
-            pending_tweets = [t for t in all_tweets if (t.get("id_str") or t.get("id")) not in processed_ids]
-            
-            logger.info(f"Total tweets: {len(all_tweets)}. Already processed: {len(processed_ids)}. Pending: {len(pending_tweets)}.")
+
+            results_file = "audit_results.csv"
+            self._migrate_csv_if_needed(results_file)
+            pending_tweets = self._get_pending_tweets(all_tweets, results_file)
+            already_processed = len(all_tweets) - len(pending_tweets)
+
+            logger.info(f"Total tweets: {len(all_tweets)}. Already processed: {already_processed}. Pending: {len(pending_tweets)}.")
             
             if not pending_tweets:
                 logger.info("No pending tweets to process.")
                 return
 
-            results_file = "audit_results.csv"
-            self._migrate_csv_if_needed(results_file)
             file_exists = os.path.exists(results_file)
             
             with open(results_file, "a", newline="") as csvfile:

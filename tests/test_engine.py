@@ -71,3 +71,41 @@ def test_migrate_csv_if_needed_no_file():
         engine = AuditEngine()
         # Should not raise any error if file doesn't exist
         engine._migrate_csv_if_needed("non_existent_file.csv")
+
+
+def test_get_pending_tweets_uses_results_csv_state(tmp_path):
+    with patch.object(AuditEngine, '__init__', lambda self: None):
+        engine = AuditEngine()
+
+        results_file = tmp_path / "audit_results.csv"
+        with open(results_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["tweet_url", "deleted", "confidence", "reason"])
+            writer.writeheader()
+            writer.writerow({
+                "tweet_url": "https://x.com/user/status/1",
+                "deleted": "true",
+                "confidence": "High",
+                "reason": "offensive"
+            })
+            writer.writerow({
+                "tweet_url": "https://x.com/user/status/2",
+                "deleted": "true",
+                "confidence": "",
+                "reason": "spam"
+            })
+
+        tweets = [{"id": "1"}, {"id": "2"}, {"id": "3"}]
+        pending = engine._get_pending_tweets(tweets, str(results_file))
+
+        assert [tweet["id"] for tweet in pending] == ["2", "3"]
+
+
+def test_get_pending_tweets_when_results_csv_missing(tmp_path):
+    with patch.object(AuditEngine, '__init__', lambda self: None):
+        engine = AuditEngine()
+
+        results_file = tmp_path / "audit_results.csv"
+        tweets = [{"id": "1"}, {"id": "2"}]
+        pending = engine._get_pending_tweets(tweets, str(results_file))
+
+        assert [tweet["id"] for tweet in pending] == ["1", "2"]
