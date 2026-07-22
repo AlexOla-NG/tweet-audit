@@ -1,6 +1,10 @@
+# data & config
 config.json
-/.gemini
-/twitter-data-2026-06-11
+twitter-data-2026-06-11/
+
+# Agents
+.agents/
+.gemini/
 GEMINI.md
 
 # Audit outputs and state
