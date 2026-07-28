@@ -1,5 +1,5 @@
 ## Architecture choices (why this pattern?)
-We chose a modular design with a clear separation between `ArchiveParser`, `TweetEvaluator`, and `AuditEngine`. This keeps the parsing logic, prompting logic, and batch orchestration independently testable. Python's standard `logging` and `csv` modules are used for operational transparency and structured output.
+We chose a modular design with a clear separation between `ArchiveParser`, `TweetEvaluator`, and `AuditEngine`. The orchestration layer now composes focused helpers for logging, rate limiting, and result persistence so the core workflow is easier to test and evolve. Python's standard `logging` and `csv` modules are used for operational transparency and structured output.
 
 ## Concurrency strategy (sequential vs batch vs full async?)
 We implemented a **Batching Strategy** (50 tweets per prompt). This reduces the number of API calls while keeping the prompt compact enough for reliable evaluation. The batching approach also makes it easier to estimate token usage and rate-limit the workload.
@@ -13,6 +13,7 @@ We prioritize **Safety and Reliability** over raw speed.
 - **Rate Limiting:** We use a sliding-window `RateLimiter` to respect Gemini 3.1 Flash Lite's limits (15 RPM and 250k TPM). The engine estimates prompt size before each request and throttles execution when capacity is close to exhaustion.
 - **Prompt Engineering:** The evaluator now reads `input_prompt.md`, `scoring_model.json`, and `output_schema.json` into the prompt itself so the model receives the latest rubric, scoring weights, and expected output format in a single request.
 - **Structured Output:** Results are written to `audit_results.csv` with richer columns such as `label`, `risk_score`, `primary_issue`, and `suggested_action` rather than only a coarse delete flag.
+- **Helper-Based Design:** The workload is now split into dedicated modules for logging setup, rate limiting, and CSV persistence, which makes the system easier to reason about and extend.
 - **Dual Logging:** Robust logging to `audit.log` for debugging, plus simplified console output for day-to-day runs.
 
 ## Why you chose your specific language/framework
