@@ -9,6 +9,8 @@ from collections import deque
 from src.parser import ArchiveParser
 from src.evaluator import TweetEvaluator, RateLimitError
 
+# TODO: move classes to classes folder so main.py isnt populated with unnecessary code
+
 # Configure logging to both file and console with different formats
 log_formatter_file = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 log_formatter_console = logging.Formatter('[%(levelname)s] %(message)s')
@@ -106,7 +108,6 @@ class AuditEngine:
         if not os.path.exists(results_file):
             return
         
-        # Read the first line to check headers
         with open(results_file, "r", newline="", encoding="utf-8") as csvfile:
             reader = csv.reader(csvfile)
             try:
@@ -121,17 +122,27 @@ class AuditEngine:
             with open(results_file, "r", newline="", encoding="utf-8") as infile, \
                  open(temp_file, "w", newline="", encoding="utf-8") as outfile:
                 reader = csv.DictReader(infile)
-                fieldnames = ["tweet_url", "deleted", "confidence", "reason"]
+                fieldnames = [
+                    "tweet_url",
+                    "confidence",
+                    "reason",
+                    "label",
+                    "risk_score",
+                    "primary_issue",
+                    "suggested_action"
+                ]
                 writer = csv.DictWriter(outfile, fieldnames=fieldnames)
                 writer.writeheader()
                 
                 for row in reader:
-                    is_deleted = row.get("deleted") == "true"
                     writer.writerow({
                         "tweet_url": row.get("tweet_url"),
-                        "deleted": row.get("deleted"),
-                        "confidence": "unknown" if is_deleted else "n/a",
-                        "reason": row.get("reason")
+                        "confidence": row.get("confidence") or "n/a",
+                        "reason": row.get("reason"),
+                        "label": "",
+                        "risk_score": "",
+                        "primary_issue": "",
+                        "suggested_action": ""
                     })
             
             os.replace(temp_file, results_file)
@@ -156,13 +167,12 @@ class AuditEngine:
                 if not tweet_id:
                     continue
 
-                deleted = (row.get("deleted") or "").strip().lower() == "true"
                 confidence = (row.get("confidence") or "").strip()
 
-                if deleted and not confidence:
-                    incomplete_ids.add(tweet_id)
-                else:
+                if confidence:
                     processed_ids.add(tweet_id)
+                else:
+                    incomplete_ids.add(tweet_id)
 
         pending_tweets = []
         for tweet in tweets:
@@ -193,7 +203,15 @@ class AuditEngine:
             file_exists = os.path.exists(results_file)
             
             with open(results_file, "a", newline="") as csvfile:
-                fieldnames = ["tweet_url", "deleted", "confidence", "reason"]
+                fieldnames = [
+                    "tweet_url",
+                    "confidence",
+                    "reason",
+                    "label",
+                    "risk_score",
+                    "primary_issue",
+                    "suggested_action"
+                ]
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 if not file_exists:
                     writer.writeheader()
@@ -223,6 +241,10 @@ class AuditEngine:
                         is_flagged = flagged_info is not None
                         reason = flagged_info["reason"] if is_flagged else None
                         confidence = flagged_info["confidence"] if is_flagged else "n/a"
+                        label = flagged_info.get("label") if is_flagged else ""
+                        risk_score = flagged_info.get("risk_score") if is_flagged else ""
+                        primary_issue = flagged_info.get("primary_issue") if is_flagged else ""
+                        suggested_action = flagged_info.get("suggested_action") if is_flagged else ""
                         
                         # Log flagged tweets
                         if is_flagged:
@@ -232,10 +254,13 @@ class AuditEngine:
                         username = self.config.get("username", "user")
                         tweet_url = f"https://x.com/{username}/status/{t_id}"
                         writer.writerow({
-                            "tweet_url": tweet_url, 
-                            "deleted": "true" if is_flagged else "false",
+                            "tweet_url": tweet_url,
                             "confidence": confidence,
-                            "reason": reason or "n/a"
+                            "reason": reason or "n/a",
+                            "label": label or "",
+                            "risk_score": risk_score if risk_score is not None else "",
+                            "primary_issue": primary_issue or "",
+                            "suggested_action": suggested_action or ""
                         })
                         
                         # Mark as processed

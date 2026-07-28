@@ -1,0 +1,19 @@
+{
+	"weights": {
+		"hate_speech_or_slur": 40,
+		"targeted_harassment": 35,
+		"violent_threat": 35,
+		"explicit_sexual_content": 30,
+		"crypto_or_nft_shilling": 25,
+		"aggressive_profanity": 20,
+		"spammy_self_promotion": 15,
+		"combative_political_content": 15,
+		"general_political_content": 5,
+		"insensitive_sensitive_topic": 20,
+		"mocking_or_abrasive_tone": 15,
+		"caps_lock_or_rant_pattern": 10,
+		"respectful_language": -10,
+		"neutral_informative_tone": -15,
+		"reflective_or_self_aware_language": -10
+	}
+}
