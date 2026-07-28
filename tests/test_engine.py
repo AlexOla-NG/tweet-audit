@@ -1,4 +1,3 @@
-import pytest
 import os
 import csv
 from unittest.mock import patch
@@ -23,19 +22,33 @@ def test_migrate_csv_if_needed_old_schema(tmp_path):
             reader = csv.DictReader(f)
             rows = list(reader)
             
-        assert reader.fieldnames == ["tweet_url", "deleted", "confidence", "reason"]
+        assert reader.fieldnames == [
+            "tweet_url",
+            "confidence",
+            "reason",
+            "label",
+            "risk_score",
+            "primary_issue",
+            "suggested_action",
+        ]
         assert len(rows) == 2
         assert rows[0] == {
             "tweet_url": "https://x.com/user/status/1",
-            "deleted": "true",
-            "confidence": "unknown",
-            "reason": "offensive"
+            "confidence": "n/a",
+            "reason": "offensive",
+            "label": "",
+            "risk_score": "",
+            "primary_issue": "",
+            "suggested_action": "",
         }
         assert rows[1] == {
             "tweet_url": "https://x.com/user/status/2",
-            "deleted": "false",
             "confidence": "n/a",
-            "reason": "n/a"
+            "reason": "n/a",
+            "label": "",
+            "risk_score": "",
+            "primary_issue": "",
+            "suggested_action": "",
         }
 
 def test_migrate_csv_if_needed_already_new_schema(tmp_path):
@@ -57,7 +70,12 @@ def test_migrate_csv_if_needed_already_new_schema(tmp_path):
             reader = csv.DictReader(f)
             rows = list(reader)
             
-        assert reader.fieldnames == ["tweet_url", "deleted", "confidence", "reason"]
+        assert reader.fieldnames == [
+            "tweet_url",
+            "deleted",
+            "confidence",
+            "reason",
+        ]
         assert len(rows) == 1
         assert rows[0] == {
             "tweet_url": "https://x.com/user/status/1",

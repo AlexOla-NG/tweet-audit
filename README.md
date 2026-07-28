@@ -38,6 +38,7 @@ The tool follows a batch-processing architecture with AI-driven evaluation.
 - **Robust Parsing:** Handles X archive's JS/JSON format.
 - **Schema-Driven Evaluation:** Reads `input_prompt.md`, `scoring_model.json`, and `output_schema.json` into the prompt sent to Gemini.
 - **Structured Output:** Persists label, risk score, primary issue, and suggested action into `audit_results.csv`.
+- **Modular Orchestration:** The workflow is split across focused helpers for logging, rate limiting, and result persistence.
 - **Detailed Logging:** Operational visibility via Python logging.
 
 ### Usage
@@ -50,8 +51,14 @@ The tool follows a batch-processing architecture with AI-driven evaluation.
 ## Repository Structure
 ```text
 tweet-audit/
-├── main.py                   # Audit Engine entry point
-├── src/                      # Implementation (Parser, Evaluator)
+├── main.py                   # Audit entry point
+├── src/
+│   ├── audit_engine.py       # Main orchestration flow
+│   ├── evaluator.py          # Gemini evaluation and response normalization
+│   ├── parser.py             # X archive parsing
+│   ├── rate_limiter.py       # Request throttling helpers
+│   ├── results_store.py      # CSV migration and persistence
+│   └── logging_setup.py      # Logging bootstrap
 ├── tests/                    # Unit tests
 ├── alignment_criteria.json   # Your AI rules
 ├── input_prompt.md           # Main evaluation instructions
