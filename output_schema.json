@@ -1,0 +1,9 @@
+{
+	"tweet_url": "string",
+	"label": "keep | low-priority review | manual review | archive | delete",
+	"risk_score": 0,
+	"confidence": "low | medium | high",
+	"primary_issue": "tone | abuse | explicitness | spam | political-combativeness | crypto-shill | none",
+	"reason": "short explanation",
+	"suggested_action": "none | review manually | archive from profile | delete"
+}

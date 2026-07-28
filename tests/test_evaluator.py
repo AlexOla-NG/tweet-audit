@@ -1,5 +1,4 @@
 import pytest
-import json
 from unittest.mock import AsyncMock, patch, MagicMock
 from src.evaluator import TweetEvaluator, RateLimitError
 
@@ -96,6 +95,56 @@ async def test_evaluate_batch_confidence_fallback():
         ]
 
 @pytest.mark.asyncio
+async def test_evaluate_batch_normalizes_schema_output():
+    mock_response = MagicMock()
+    mock_response.text = '[{"id": "1", "tweet_url": "https://x.com/test/1", "label": "Archive", "risk_score": "55", "confidence": "HIGH", "primary_issue": "spam", "reason": "Spammy promotional language", "suggested_action": "archive from profile"}]'
+    mock_response.usage_metadata.total_token_count = 40
+
+    with patch("google.genai.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        evaluator = TweetEvaluator(api_key="test_key", criteria={})
+        flagged_items, total_tokens = await evaluator.evaluate_batch([{"id": "1", "full_text": "test"}])
+
+        assert flagged_items == [{
+            "id": "1",
+            "tweet_url": "https://x.com/test/1",
+            "label": "archive",
+            "risk_score": 55,
+            "confidence": "high",
+            "primary_issue": "spam",
+            "reason": "Spammy promotional language",
+            "suggested_action": "archive from profile"
+        }]
+        assert total_tokens == 40
+
+@pytest.mark.asyncio
+async def test_evaluate_batch_accepts_numeric_tweet_url_identifier():
+    mock_response = MagicMock()
+    mock_response.text = '[{"tweet_url": "2062338046586949788", "label": "delete", "risk_score": 30, "confidence": "high", "primary_issue": "explicitness", "reason": "Contains explicit sexual content", "suggested_action": "delete"}]'
+    mock_response.usage_metadata.total_token_count = 20
+
+    with patch("google.genai.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        evaluator = TweetEvaluator(api_key="test_key", criteria={})
+        flagged_items, total_tokens = await evaluator.evaluate_batch([{"id": "1", "full_text": "test"}])
+
+        assert flagged_items == [{
+            "id": "2062338046586949788",
+            "tweet_url": "2062338046586949788",
+            "label": "delete",
+            "risk_score": 30,
+            "confidence": "high",
+            "primary_issue": "explicitness",
+            "reason": "Contains explicit sexual content",
+            "suggested_action": "delete"
+        }]
+        assert total_tokens == 20
+
+@pytest.mark.asyncio
 async def test_evaluate_batch_invalid_json_logging(caplog):
     mock_response = MagicMock()
     mock_response.text = 'Not a JSON list'
@@ -111,6 +160,15 @@ async def test_evaluate_batch_invalid_json_logging(caplog):
         assert flagged_items == []
         assert total_tokens == 10
         assert "Failed to decode JSON response from AI" in caplog.text
+
+def test_build_prompt_includes_scoring_model_and_output_schema():
+    evaluator = TweetEvaluator(api_key="test_key", criteria={"forbidden_words": ["crypto"]})
+    prompt = evaluator._build_prompt([{"id": "1", "full_text": "test"}])
+
+    assert "scoring_model.json" in prompt
+    assert '"weights"' in prompt
+    assert '"tweet_url"' in prompt
+    assert '"risk_score"' in prompt
 
 @pytest.mark.asyncio
 async def test_default_model_selection():

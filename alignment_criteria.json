@@ -1,13 +1,33 @@
 {
   "criteria": {
-    "forbidden_words": [
-      "crypto",
-      "NFT",
-      "hustlegrindset"
+    "risk_model": "tiered",
+    "hard_block": [
+      "hate_speech_or_slurs",
+      "targeted_harassment",
+      "violent_threats",
+      "explicit_sexual_content",
+      "crypto_or_nft_shilling"
     ],
-    "professional_check": true,
-    "tone": "respectful and thoughtful",
-    "exclude_politics": true,
-    "description": "Flag tweets that use unprofessional language, promote crypto/NFTs, or express outdated political views that no longer align with my current values."
+    "soft_review": [
+      "combative_political_content",
+      "aggressive_profanity",
+      "spammy_self_promotion",
+      "insensitive_jokes_on_sensitive_topics",
+      "abrasive_or_mocking_tone"
+    ],
+    "allow_with_context": [
+      "general_political_commentary",
+      "civic_engagement",
+      "news_reactions",
+      "strong_but_respectful_opinions",
+      "older_views_that_are_non-abusive"
+    ],
+    "tone_preferences": [
+      "respectful",
+      "thoughtful",
+      "measured",
+      "professional but human"
+    ],
+    "description": "Assess tweets for portfolio and public-profile fit using a tiered reputational-risk model. Distinguish clearly between content that should be hidden, content that deserves manual review, and content that is acceptable even if opinionated or dated."
   }
 }
